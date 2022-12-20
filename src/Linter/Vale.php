@@ -5,6 +5,7 @@ namespace Beyondcode\LaravelProseLinter\Linter;
 use Beyondcode\LaravelProseLinter\Exceptions\LinterException;
 use Exception;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
@@ -50,7 +51,7 @@ class Vale
             'Darwin' => './vale-macos ',
             'Windows' => 'vale.exe ',
             'Linux' => './vale-linux ',
-            default => throw new LinterException('Operating system is not supported: '.PHP_OS_FAMILY),
+            default => throw new LinterException('Operating system is not supported: ' . PHP_OS_FAMILY),
         };
     }
 
@@ -73,22 +74,23 @@ class Vale
     public function lintString(string $textToLint, ?string $textIdentifier = null): array|null
     {
         $process = Process::fromShellCommandline(
-            $this->valeExecutable.' --output=JSON --ext=".md" "'.$textToLint.'"'
+            $this->valeExecutable . ' --output=JSON --ext=".md" "' . $textToLint . '"'
         );
+
         $process->setWorkingDirectory($this->valePath);
         $process->run();
 
-        if (! $process->isSuccessful()) {
+        if (!$process->isSuccessful() && $process->getOutput() === null && json_decode($process->getOutput(), true) === null) {
             throw new ProcessFailedException($process);
         }
 
         $result = json_decode($process->getOutput(), true);
 
-        if (! empty($result)) {
+        if (!empty($result)) {
             return LintingResult::fromJsonOutput($textIdentifier ?? 'Text', $result)->toArray();
         }
-        if (! is_array($result)) {
-            throw new LinterException('Invalid vale output: '.print_r($process->getOutput(), true));
+        if (!is_array($result)) {
+            throw new LinterException('1 Invalid vale output: ' . print_r($process->getOutput(), true));
         }
 
         return null;
@@ -103,24 +105,15 @@ class Vale
      */
     public function lintFile($filePath, $textIdentifier): array|null
     {
-        $process = Process::fromShellCommandline(
-            $this->valeExecutable.' --output=JSON '.$filePath
-        );
-
-        $process->setWorkingDirectory($this->valePath);
-
-        $process->run();
-
-        $result = json_decode($process->getOutput(), true);
-
-        if (! empty($result)) {
-            return LintingResult::fromJsonOutput($textIdentifier ?? 'Text', $result)->toArray();
+        if (!File::exists($filePath)) {
+            throw new Exception('File does not exist: ' . $filePath);
         }
-        if (! is_array($result)) {
-            throw new Exception('Invalid vale output: '.print_r($process->getOutput(), true));
-        }
+        $content = File::get($filePath);
 
-        return null;
+        // remove quotes from the content
+        $content = Str::replace('"', '', $content);
+
+        return $this->lintString($content, $textIdentifier);
     }
 
     /**
@@ -147,7 +140,7 @@ class Vale
 
     private function writeStyles()
     {
-        $stylePath = $this->valePath.'/styles';
+        $stylePath = $this->valePath . '/styles';
 
         // clear temporary vale style directory
         File::deleteDirectory($stylePath);
@@ -160,7 +153,7 @@ class Vale
             );
         } else {
             // copy resources from default
-            File::copyDirectory(__DIR__.'/../../resources/styles', $stylePath);
+            File::copyDirectory(__DIR__ . '/../../resources/styles', $stylePath);
         }
     }
 
@@ -179,9 +172,9 @@ class Vale
 StylesPath = styles
 MinAlertLevel = suggestion
 
-[*.{html,md}]
+[*]
 BasedOnStyles = {$appliedStyles}
 ";
-        File::put($this->valePath.'/.vale.ini', $valeIni);
+        File::put($this->valePath . '/.vale.ini', $valeIni);
     }
 }

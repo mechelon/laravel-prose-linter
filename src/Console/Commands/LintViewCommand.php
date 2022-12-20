@@ -75,6 +75,7 @@ class LintViewCommand extends LinterCommand
             } catch (Exception $exception) {
                 $this->warn("($templateToLint) Unexpected error.");
                 if ($verbose) {
+                    $this->line("");
                     $this->line($exception->getMessage());
                 }
             } finally {
