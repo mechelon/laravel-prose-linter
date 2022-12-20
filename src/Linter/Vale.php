@@ -105,15 +105,24 @@ class Vale
      */
     public function lintFile($filePath, $textIdentifier): array|null
     {
-        if (!File::exists($filePath)) {
-            throw new Exception('File does not exist: ' . $filePath);
+        $process = Process::fromShellCommandline(
+            $this->valeExecutable.' --output=JSON --ext=.md '.$filePath
+        );
+
+        $process->setWorkingDirectory($this->valePath);
+
+        $process->run();
+
+        $result = json_decode($process->getOutput(), true);
+
+        if (! empty($result)) {
+            return LintingResult::fromJsonOutput($textIdentifier ?? 'Text', $result)->toArray();
         }
-        $content = File::get($filePath);
+        if (! is_array($result)) {
+            throw new Exception('Invalid vale output: '.print_r($process->getOutput(), true));
+        }
 
-        // remove quotes from the content
-        $content = Str::replace('"', '', $content);
-
-        return $this->lintString($content, $textIdentifier);
+        return null;
     }
 
     /**
