@@ -4,8 +4,8 @@ namespace Beyondcode\LaravelProseLinter\Linter;
 
 use Beyondcode\LaravelProseLinter\Exceptions\LinterException;
 use Exception;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
@@ -123,6 +123,41 @@ class Vale
         }
 
         return null;
+    }
+
+    /**
+     * In contrast to the other linting methods, this method will return an array with detailed linting results,
+     * including rules, ruleset information and action hints.
+     *
+     * @param  string  $textToLint
+     * @return array
+     *
+     * @throws LinterException
+     */
+    public function lint(string $textToLint): array
+    {
+        $process = Process::fromShellCommandline(
+            $this->valeExecutable . ' --output=JSON --ext=".md" "' . $textToLint . '"'
+        );
+
+        $process->setWorkingDirectory($this->valePath);
+        $process->run();
+
+        if (!$process->isSuccessful() && $process->getOutput() === null && json_decode($process->getOutput(), true) === null) {
+            throw new ProcessFailedException($process);
+        }
+
+        $result = json_decode($process->getOutput(), true);
+
+        if (!is_array($result)) {
+            throw new LinterException('Invalid vale output: ' . print_r($process->getOutput(), true));
+        }
+
+        if(Arr::exists($result, 'stdin.md')) {
+            return $result["stdin.md"];
+        }
+
+        return $result;
     }
 
     /**
